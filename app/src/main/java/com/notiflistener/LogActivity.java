@@ -12,6 +12,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -346,7 +348,7 @@ public class LogActivity extends AppCompatActivity {
             tv.setText(text == null || text.isEmpty() ? "(Kosong)" : text);
             tv.setTextColor(Color.parseColor("#E2E8F0"));
             tv.setTextSize(11);
-            tv.setFontFamily(android.graphics.Typeface.MONOSPACE);
+            tv.setTypeface(android.graphics.Typeface.MONOSPACE);
             tv.setBackgroundColor(Color.parseColor("#020617"));
             tv.setPadding(12, 12, 12, 12);
             mainLayout.addView(tv);

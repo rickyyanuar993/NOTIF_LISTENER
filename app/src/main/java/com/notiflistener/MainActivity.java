@@ -15,6 +15,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.graphics.Color;
 import android.provider.Settings;
 import android.view.View;
 import android.widget.*;
@@ -254,7 +255,7 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             // Fallback to Data Saver settings
             try {
-                Intent intent = new Intent(Settings.ACTION_DATA_SAVER_SETTINGS);
+                Intent intent = new Intent("android.settings.DATA_SAVER_SETTINGS");
                 startActivity(intent);
             } catch (Exception ex) {
                 // Fallback to Application Info settings

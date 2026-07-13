@@ -93,7 +93,7 @@ public class MyNotificationListenerService extends NotificationListenerService {
         // Get app icon
         int iconRes = getApplicationInfo().icon;
         if (iconRes == 0) {
-            iconRes = android.R.drawable.ic_lock_idle_bell;
+            iconRes = android.R.drawable.ic_dialog_info;
         }
 
         Notification notification = builder
