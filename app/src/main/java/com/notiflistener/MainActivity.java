@@ -1,5 +1,6 @@
 package com.notiflistener;
 
+import android.Manifest;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -9,9 +10,11 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.View;
 import android.widget.*;
@@ -54,9 +57,14 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout layoutDashboard, layoutGate;
     private Button btnGateGrantNotification;
 
+    private Button btnOpenLogViewer;
+    private Button btnOptimizeBattery, btnOptimizeData;
+    private TextView tvBatteryStatus;
+
     private SharedPreferences prefs;
     private ExecutorService executor = Executors.newSingleThreadExecutor();
     private Handler mainHandler = new Handler(Looper.getMainLooper());
+    private LogDbHelper dbHelper;
 
     private Set<String> customSelectedPackages = new LinkedHashSet<>();
     private List<AppRecord> allInstalledApps = new ArrayList<>();
@@ -77,11 +85,17 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        dbHelper = new LogDbHelper(this);
 
         // Bind Views
         layoutDashboard = findViewById(R.id.layoutDashboard);
         layoutGate = findViewById(R.id.layoutGate);
         btnGateGrantNotification = findViewById(R.id.btnGateGrantNotification);
+
+        btnOpenLogViewer = findViewById(R.id.btnOpenLogViewer);
+        btnOptimizeBattery = findViewById(R.id.btnOptimizeBattery);
+        btnOptimizeData = findViewById(R.id.btnOptimizeData);
+        tvBatteryStatus = findViewById(R.id.tvBatteryStatus);
 
         etApiUrl = findViewById(R.id.etApiUrl);
         etApiHeaders = findViewById(R.id.etApiHeaders);
@@ -134,6 +148,14 @@ public class MainActivity extends AppCompatActivity {
             layoutAutoClearConfig.setVisibility(isChecked ? View.VISIBLE : View.GONE);
         });
 
+        btnOpenLogViewer.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, LogActivity.class);
+            startActivity(intent);
+        });
+
+        btnOptimizeBattery.setOnClickListener(v -> requestIgnoreBatteryOptimizations());
+        btnOptimizeData.setOnClickListener(v -> openDataSaverSettings());
+
         // Setup quick header chips
         setupHeaderChips();
 
@@ -146,12 +168,16 @@ public class MainActivity extends AppCompatActivity {
 
         // Check Permissions
         checkNotificationPermission();
+
+        // Request runtime Notification permission (Android 13+)
+        requestNotificationPermission();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         checkNotificationPermission();
+        updateBatteryOptimizationStatus();
     }
 
     @Override
@@ -165,6 +191,82 @@ public class MainActivity extends AppCompatActivity {
     protected void onStop() {
         super.onStop();
         unregisterReceiver(logReceiver);
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 101);
+            }
+        }
+    }
+
+    private void updateBatteryOptimizationStatus() {
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        if (pm == null) return;
+
+        boolean ignoring = false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            ignoring = pm.isIgnoringBatteryOptimizations(getPackageName());
+        }
+
+        if (ignoring) {
+            tvBatteryStatus.setText("Status Baterai: 🟢 Tak Terbatas (Optimal)");
+            tvBatteryStatus.setTextColor(Color.parseColor("#34D399"));
+        } else {
+            tvBatteryStatus.setText("Status Baterai: 🔴 Dibatasi (Bisa mati saat idle)");
+            tvBatteryStatus.setTextColor(Color.parseColor("#F43F5E"));
+        }
+    }
+
+    private void requestIgnoreBatteryOptimizations() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null && pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                Toast.makeText(this, "Aplikasi sudah diatur ke Baterai Tak Terbatas!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            try {
+                Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            } catch (Exception e) {
+                // Fallback to general settings
+                try {
+                    Intent intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                    startActivity(intent);
+                } catch (Exception ex) {
+                    Toast.makeText(this, "Tidak dapat membuka pengaturan baterai.", Toast.LENGTH_SHORT).show();
+                }
+            }
+        } else {
+            Toast.makeText(this, "Optimasi baterai tidak diperlukan di versi Android ini.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void openDataSaverSettings() {
+        // Try opening ignore restrictions page first
+        try {
+            Intent intent = new Intent(Settings.ACTION_IGNORE_BACKGROUND_DATA_RESTRICTIONS_SETTINGS);
+            intent.setData(Uri.parse("package:" + getPackageName()));
+            startActivity(intent);
+        } catch (Exception e) {
+            // Fallback to Data Saver settings
+            try {
+                Intent intent = new Intent(Settings.ACTION_DATA_SAVER_SETTINGS);
+                startActivity(intent);
+            } catch (Exception ex) {
+                // Fallback to Application Info settings
+                try {
+                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    intent.setData(Uri.parse("package:" + getPackageName()));
+                    startActivity(intent);
+                } catch (Exception exc) {
+                    Toast.makeText(this, "Tidak dapat membuka pengaturan data.", Toast.LENGTH_SHORT).show();
+                }
+            }
+        }
     }
 
     private void checkNotificationPermission() {
@@ -387,6 +489,11 @@ public class MainActivity extends AppCompatActivity {
         logConsole("[Test API] Mengirim payload pengujian ke: " + apiUrlStr);
         executor.execute(() -> {
             HttpURLConnection conn = null;
+            String body = "";
+            String responseBody = "";
+            int responseCode = -1;
+            String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+
             try {
                 URL url = new URL(apiUrlStr);
                 conn = (HttpURLConnection) url.openConnection();
@@ -419,8 +526,7 @@ public class MainActivity extends AppCompatActivity {
                 json.put("text", "Ini adalah payload pengujian dari aplikasi Notif Listener.");
                 json.put("postTime", System.currentTimeMillis());
                 json.put("id", 999);
-
-                String body = json.toString();
+                body = json.toString();
 
                 // Write body
                 try (OutputStream os = conn.getOutputStream()) {
@@ -428,10 +534,22 @@ public class MainActivity extends AppCompatActivity {
                     os.write(input, 0, input.length);
                 }
 
-                int responseCode = conn.getResponseCode();
-                String timeStamp = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                responseCode = conn.getResponseCode();
+                String timeStampStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                
                 if (responseCode >= 200 && responseCode < 300) {
-                    logConsole("[" + timeStamp + "] [Test API] SUKSES! Status Code: " + responseCode);
+                    StringBuilder response = new StringBuilder();
+                    try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "utf-8"))) {
+                        String line;
+                        while ((line = br.readLine()) != null) {
+                            response.append(line.trim());
+                        }
+                    }
+                    responseBody = response.toString();
+                    logConsole("[" + timeStampStr + "] [Test API] SUKSES! Status Code: " + responseCode);
+                    
+                    // Log in SQLite DB
+                    dbHelper.insertLog(timestamp, "NotifListener Test", "com.notiflistener", "Halo User!", "Ini adalah payload pengujian.", apiUrlStr, body, responseCode, responseBody, true);
                 } else {
                     StringBuilder errorResponse = new StringBuilder();
                     try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getErrorStream(), "utf-8"))) {
@@ -440,11 +558,19 @@ public class MainActivity extends AppCompatActivity {
                             errorResponse.append(line.trim());
                         }
                     } catch (Exception ignored) {}
-                    logConsole("[" + timeStamp + "] [Test API] GAGAL! Status Code: " + responseCode + " - " + errorResponse.toString());
+                    responseBody = errorResponse.toString();
+                    logConsole("[" + timeStampStr + "] [Test API] GAGAL! Status Code: " + responseCode + " - " + responseBody);
+                    
+                    // Log in SQLite DB
+                    dbHelper.insertLog(timestamp, "NotifListener Test", "com.notiflistener", "Halo User!", "Ini adalah payload pengujian.", apiUrlStr, body, responseCode, responseBody, true);
                 }
             } catch (Exception e) {
-                String timeStamp = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
-                logConsole("[" + timeStamp + "] [Test API] ERROR: " + e.getMessage());
+                String errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown Error";
+                String timeStampStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                logConsole("[" + timeStampStr + "] [Test API] ERROR: " + errorMsg);
+                
+                // Log in SQLite DB
+                dbHelper.insertLog(timestamp, "NotifListener Test", "com.notiflistener", "Halo User!", "Ini adalah payload pengujian.", apiUrlStr, body, -1, "Exception: " + errorMsg, true);
             } finally {
                 if (conn != null) {
                     conn.disconnect();

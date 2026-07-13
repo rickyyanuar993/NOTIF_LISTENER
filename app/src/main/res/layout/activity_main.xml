@@ -47,6 +47,44 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
+                <!-- Navigation & Quick Stats Card -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#1E293B"
+                    android:padding="16dp"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="📊 UTILITY &amp; LOGS"
+                        android:textColor="#38BDF8"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1"
+                        android:layout_marginBottom="10dp"/>
+
+                    <Button
+                        android:id="@+id/btnOpenLogViewer"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:text="📋 Buka Log Viewer Khusus"
+                        android:textSize="13sp"
+                        android:textColor="#0F172A"
+                        android:backgroundTint="#F59E0B"
+                        android:layout_marginBottom="4dp"/>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Halaman khusus untuk melihat riwayat data JSON terkirim dan respons dari server."
+                        android:textColor="#64748B"
+                        android:textSize="10sp"
+                        android:gravity="center_horizontal"/>
+                </LinearLayout>
+
                 <!-- API Configuration Card -->
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -111,7 +149,7 @@
                                 android:layout_height="wrap_content"
                                 android:text="+ Content-Type: JSON"
                                 android:textColor="#E2E8F0"
-                                android:textSize="10dp"
+                                android:textSize="10sp"
                                 android:background="#334155"
                                 android:paddingHorizontal="8dp"
                                 android:paddingVertical="4dp"
@@ -124,7 +162,7 @@
                                 android:layout_height="wrap_content"
                                 android:text="+ Authorization: Bearer"
                                 android:textColor="#E2E8F0"
-                                android:textSize="10dp"
+                                android:textSize="10sp"
                                 android:background="#334155"
                                 android:paddingHorizontal="8dp"
                                 android:paddingVertical="4dp"
@@ -150,7 +188,7 @@
                                 android:layout_height="wrap_content"
                                 android:text="+ User-Agent"
                                 android:textColor="#E2E8F0"
-                                android:textSize="10dp"
+                                android:textSize="10sp"
                                 android:background="#334155"
                                 android:paddingHorizontal="8dp"
                                 android:paddingVertical="4dp"
@@ -169,6 +207,72 @@
                         android:gravity="top"
                         android:textSize="12sp"
                         android:backgroundTint="#38BDF8"/>
+                </LinearLayout>
+
+                <!-- Background Optimizations Card -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#1E293B"
+                    android:padding="16dp"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⚡ OPTIMASI LATAR BELAKANG"
+                        android:textColor="#F43F5E"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1"
+                        android:layout_marginBottom="10dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Agar aplikasi terus berjalan tanpa dihentikan sistem Android secara paksa saat HP idle."
+                        android:textColor="#94A3B8"
+                        android:textSize="11sp"
+                        android:layout_marginBottom="12dp"/>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="8dp">
+
+                        <Button
+                            android:id="@+id/btnOptimizeBattery"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:layout_height="wrap_content"
+                            android:text="🔋 Pengaturan Baterai"
+                            android:textSize="11sp"
+                            android:textColor="#0F172A"
+                            android:backgroundTint="#34D399"
+                            android:layout_marginEnd="4dp"/>
+
+                        <Button
+                            android:id="@+id/btnOptimizeData"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:layout_height="wrap_content"
+                            android:text="📶 Batasan Data Saver"
+                            android:textSize="11sp"
+                            android:textColor="#0F172A"
+                            android:backgroundTint="#38BDF8"
+                            android:layout_marginStart="4dp"/>
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvBatteryStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Status Baterai: Menghubungkan..."
+                        android:textColor="#64748B"
+                        android:textSize="11sp"
+                        android:gravity="center_horizontal"/>
                 </LinearLayout>
 
                 <!-- App Filter Card -->

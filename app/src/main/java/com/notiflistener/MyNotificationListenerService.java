@@ -1,10 +1,16 @@
 package com.notiflistener;
 
 import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -31,14 +37,90 @@ public class MyNotificationListenerService extends NotificationListenerService {
 
     private static final String TAG = "NotifListenerService";
     private static final String PREFS_NAME = "NotifListenerPrefs";
+    private static final String CHANNEL_ID = "notif_listener_foreground_channel";
+    private static final int FOREGROUND_NOTIFICATION_ID = 888;
 
     private ExecutorService executor = Executors.newSingleThreadExecutor();
     private Handler mainHandler = new Handler(Looper.getMainLooper());
+    private LogDbHelper dbHelper;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        dbHelper = new LogDbHelper(this);
         Log.i(TAG, "Notification Listener Service Created");
+    }
+
+    @Override
+    public void onListenerConnected() {
+        super.onListenerConnected();
+        Log.i(TAG, "Notification Listener Service Connected");
+        startForegroundServiceNotification();
+    }
+
+    private void startForegroundServiceNotification() {
+        // Create Notification Channel for Android 8.0+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Notif Listener Service Channel",
+                    NotificationManager.IMPORTANCE_LOW
+            );
+            channel.setDescription("Menjaga Notif Listener tetap berjalan di latar belakang");
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+            }
+        }
+
+        // Pending Intent to open MainActivity
+        Intent intent = new Intent(this, MainActivity.class);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+                this,
+                0,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+        );
+
+        // Build Notification
+        Notification.Builder builder;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder = new Notification.Builder(this, CHANNEL_ID);
+        } else {
+            builder = new Notification.Builder(this);
+        }
+
+        // Get app icon
+        int iconRes = getApplicationInfo().icon;
+        if (iconRes == 0) {
+            iconRes = android.R.drawable.ic_lock_idle_bell;
+        }
+
+        Notification notification = builder
+                .setContentTitle("Notif Listener Aktif")
+                .setContentText("Mendengarkan & meneruskan data notifikasi...")
+                .setSmallIcon(iconRes)
+                .setContentIntent(pendingIntent)
+                .setOngoing(true)
+                .build();
+
+        // Start Foreground Q+ compliance
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                        FOREGROUND_NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                );
+            } else {
+                startForeground(FOREGROUND_NOTIFICATION_ID, notification);
+            }
+            Log.i(TAG, "Service started in foreground successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to start service in foreground: " + e.getMessage());
+            // Fallback for older/modified devices
+            startForeground(FOREGROUND_NOTIFICATION_ID, notification);
+        }
     }
 
     @Override
@@ -134,7 +216,22 @@ public class MyNotificationListenerService extends NotificationListenerService {
 
     private boolean forwardNotificationToApi(String apiUrlStr, String customHeaders, String packageName, String appName, String title, String text, long postTime, int id) {
         HttpURLConnection conn = null;
+        String reqBody = "";
+        String respBody = "";
+        int responseCode = -1;
+        String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+
         try {
+            // Create JSON payload
+            JSONObject json = new JSONObject();
+            json.put("packageName", packageName);
+            json.put("appName", appName);
+            json.put("title", title);
+            json.put("text", text);
+            json.put("postTime", postTime);
+            json.put("id", id);
+            reqBody = json.toString();
+
             URL url = new URL(apiUrlStr);
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -158,26 +255,27 @@ public class MyNotificationListenerService extends NotificationListenerService {
                 }
             }
 
-            // Create JSON payload
-            JSONObject json = new JSONObject();
-            json.put("packageName", packageName);
-            json.put("appName", appName);
-            json.put("title", title);
-            json.put("text", text);
-            json.put("postTime", postTime);
-            json.put("id", id);
-
-            String body = json.toString();
-
             // Write body
             try (OutputStream os = conn.getOutputStream()) {
-                byte[] input = body.getBytes("utf-8");
+                byte[] input = reqBody.getBytes("utf-8");
                 os.write(input, 0, input.length);
             }
 
-            int responseCode = conn.getResponseCode();
+            responseCode = conn.getResponseCode();
             if (responseCode >= 200 && responseCode < 300) {
+                // Read success stream
+                StringBuilder response = new StringBuilder();
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "utf-8"))) {
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        response.append(line.trim());
+                    }
+                }
+                respBody = response.toString();
                 broadcastLog("HTTP Success [" + responseCode + "] for " + appName);
+
+                // Insert success log in DB
+                dbHelper.insertLog(timestamp, appName, packageName, title, text, apiUrlStr, reqBody, responseCode, respBody, false);
                 return true;
             } else {
                 // Read error stream
@@ -188,11 +286,19 @@ public class MyNotificationListenerService extends NotificationListenerService {
                         errorResponse.append(line.trim());
                     }
                 } catch (Exception ignored) {}
-                broadcastLog("HTTP Error [" + responseCode + "]: " + errorResponse.toString());
+                respBody = errorResponse.toString();
+                broadcastLog("HTTP Error [" + responseCode + "]: " + respBody);
+
+                // Insert error log in DB
+                dbHelper.insertLog(timestamp, appName, packageName, title, text, apiUrlStr, reqBody, responseCode, respBody, false);
                 return false;
             }
         } catch (Exception e) {
-            broadcastLog("Network Error: " + e.getMessage());
+            String errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown Network Error";
+            broadcastLog("Network Error: " + errorMsg);
+
+            // Insert failure log in DB
+            dbHelper.insertLog(timestamp, appName, packageName, title, text, apiUrlStr, reqBody, -1, "Exception: " + errorMsg, false);
             return false;
         } finally {
             if (conn != null) {
